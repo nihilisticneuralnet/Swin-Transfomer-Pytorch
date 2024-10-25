@@ -1,4 +1,5 @@
 import torch
+import main
 
 net = SwinTransformer(
     hidden_dim=96,
