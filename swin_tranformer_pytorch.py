@@ -10,8 +10,9 @@ class CyclicShift(nn.Module):
         self.displacement = displacement
 
     def forward(self, x):
-        return torch.roll(x, shifts=(self.displacement, self.displacement), dims=(1, 2))
-
+        x = torch.roll(x, shifts=(self.displacement, self.displacement), dims=(1, 2))
+        print("CyclicShift output shape:", x.shape)
+        return x
 
 class Residual(nn.Module):
     def __init__(self, fn):
@@ -19,8 +20,9 @@ class Residual(nn.Module):
         self.fn = fn
 
     def forward(self, x, **kwargs):
-        return self.fn(x, **kwargs) + x
-
+        out = self.fn(x, **kwargs) + x
+        print("Residual output shape:", out.shape)
+        return out
 
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
@@ -29,8 +31,10 @@ class PreNorm(nn.Module):
         self.fn = fn
 
     def forward(self, x, **kwargs):
-        return self.fn(self.norm(x), **kwargs)
-
+        normed_x = self.norm(x)
+        out = self.fn(normed_x, **kwargs)
+        print("PreNorm output shape:", out.shape)
+        return out
 
 class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim):
@@ -42,7 +46,9 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, x):
-        return self.net(x)
+        out = self.net(x)
+        print("FeedForward output shape:", out.shape)
+        return out
 
 
 def create_mask(window_size, displacement, upper_lower, left_right):
@@ -100,9 +106,11 @@ class WindowAttention(nn.Module):
     def forward(self, x):
         if self.shifted:
             x = self.cyclic_shift(x)
-
+            print("After CyclicShift:", x.shape)
+            
         b, n_h, n_w, _, h = *x.shape, self.heads
-
+        print("WindowAttention input shape:", x.shape)
+        
         qkv = self.to_qkv(x).chunk(3, dim=-1)
         nw_h = n_h // self.window_size
         nw_w = n_w // self.window_size
@@ -110,9 +118,10 @@ class WindowAttention(nn.Module):
         q, k, v = map(
             lambda t: rearrange(t, 'b (nw_h w_h) (nw_w w_w) (h d) -> b h (nw_h nw_w) (w_h w_w) d',
                                 h=h, w_h=self.window_size, w_w=self.window_size), qkv)
-
+        print("q, k, v shapes:", q.shape, k.shape, v.shape)
         dots = einsum('b h w i d, b h w j d -> b h w i j', q, k) * self.scale
-
+        print("Dot product (attention logits) shape:", dots.shape)
+        
         if self.relative_pos_embedding:
             dots += self.pos_embedding[self.relative_indices[:, :, 0], self.relative_indices[:, :, 1]]
         else:
@@ -131,6 +140,7 @@ class WindowAttention(nn.Module):
 
         if self.shifted:
             out = self.cyclic_back_shift(out)
+            print("After Cyclic Back Shift:", out.shape)
         return out
 
 
@@ -147,7 +157,9 @@ class SwinBlock(nn.Module):
 
     def forward(self, x):
         x = self.attention_block(x)
+        print("SwinBlock after attention shape:", x.shape)
         x = self.mlp_block(x)
+        print("SwinBlock after MLP shape:", x.shape)
         return x
 
 
@@ -160,11 +172,13 @@ class PatchMerging(nn.Module):
 
     def forward(self, x):
         b, c, h, w = x.shape
+        print("PatchMerging input shape:", x.shape)
         new_h, new_w = h // self.downscaling_factor, w // self.downscaling_factor
         x = self.patch_merge(x).view(b, -1, new_h, new_w).permute(0, 2, 3, 1)
         x = self.linear(x)
+        print("PatchMerging output shape:", x.shape)
         return x
-
+        
 
 class StageModule(nn.Module):
     def __init__(self, in_channels, hidden_dimension, layers, downscaling_factor, num_heads, head_dim, window_size,
@@ -185,12 +199,14 @@ class StageModule(nn.Module):
             ]))
 
     def forward(self, x):
+        print("StageModule input shape:", x.shape)
         x = self.patch_partition(x)
         for regular_block, shifted_block in self.layers:
             x = regular_block(x)
             x = shifted_block(x)
+        print("StageModule output shape:", x.shape)
         return x.permute(0, 3, 1, 2)
-
+        
 
 class SwinTransformer(nn.Module):
     def __init__(self, *, hidden_dim, layers, heads, channels=3, num_classes=1000, head_dim=32, window_size=7,
@@ -216,13 +232,21 @@ class SwinTransformer(nn.Module):
         )
 
     def forward(self, img):
+        print("SwinTransformer input image shape:", img.shape)
         x = self.stage1(img)
+        print("After stage1 shape:", x.shape)
         x = self.stage2(x)
+        print("After stage2 shape:", x.shape)
         x = self.stage3(x)
+        print("After stage3 shape:", x.shape)
         x = self.stage4(x)
+        print("After stage4 shape:", x.shape)
         x = x.mean(dim=[2, 3])
-        return self.mlp_head(x)
-
+        print("After global average pooling shape:", x.shape)
+        out = self.mlp_head(x)
+        print("Final output shape:", out.shape)
+        return out
+        
 
 def swin_t(hidden_dim=96, layers=(2, 2, 6, 2), heads=(3, 6, 12, 24), **kwargs):
     return SwinTransformer(hidden_dim=hidden_dim, layers=layers, heads=heads, **kwargs)
