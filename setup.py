@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='Swin-Tranformer',
+    name='swin-tranformer-pytorch',
     packages=find_packages(),
     version='0.4.1',
     license='MIT',
