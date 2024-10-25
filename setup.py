@@ -12,7 +12,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author='parth',
-    url='https://github.com/berniwal/swin-transformer-pytorch',
+    url='https://github.com/nihilisticneuralnet/Swin-Transfomer-Pytorch-implementation',
     keywords=[
         'artificial intelligence',
         'attention mechanism',
